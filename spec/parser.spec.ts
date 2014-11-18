@@ -49,6 +49,22 @@ describe('parser', () => {
             console.log(p.word('Yes!'));
         });
 
+        it('shoud work', () => {
+            console.log(p.word2('Yes!'));
+        });
+
+    });
+
+    describe('expr', () => {
+
+        it('should work', () => {
+            console.log(p.expr('1+2-(3+4)'));
+        });
+
+        it('should work 2', () => {
+            console.log(p.exprv2('1+2-(3+4)'));
+        });
+
     });
 
 });

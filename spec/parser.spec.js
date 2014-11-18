@@ -26,6 +26,17 @@ describe('parser', function () {
         it('shoud work', function () {
             console.log(p.word('Yes!'));
         });
+        it('shoud work', function () {
+            console.log(p.word2('Yes!'));
+        });
+    });
+    describe('expr', function () {
+        it('should work', function () {
+            console.log(p.expr('1+2-(3+4)'));
+        });
+        it('should work 2', function () {
+            console.log(p.exprv2('1+2-(3+4)'));
+        });
     });
 });
 //# sourceMappingURL=parser.spec.js.map
