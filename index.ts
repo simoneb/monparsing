@@ -1,66 +1,99 @@
-class Result<A> {
-    constructor(public v:A, public cs1:string) {
-    }
-}
-
 interface IParser<A> {
-    (cs:string): Result<A>[];
+  (cs:string): [A, string][];
 }
 
 interface Monad<A> {
-    unit: (v:A) => Monad<A>;
-    bind: <B>(m:Monad<A>) => (f:(v:A) => Monad<B>) => Monad<B>;
+  unit: (v:A) => Monad<A>;
+  bind: <B>(m:Monad<A>) => (f:(v:A) => Monad<B>) => Monad<B>;
 }
 
 interface Parser<A> extends IParser<A> {
-    bind: <B>(f:(v:A) => Parser<B>) => Parser<B>;
+  bind: <B>(f:(v:A) => Parser<B>) => Parser<B>;
 }
 
-function mp<A>(p:IParser<A>):Parser<A> {
-    var parser = <Parser<A>>p;
-    parser.bind = <B>(f) => mp<B>(cs => [].concat.apply([], p(cs).map(res => f(res.v)(res.cs1))));
+export var mp = <A>(p:IParser<A>):Parser<A> => {
+  var parser = <Parser<A>>p;
+  parser.bind = <B>(f) => mp<B>(cs => [].concat.apply([], p(cs).map(res => f(res[0])(res[1]))));
 
-    return parser;
-}
+  return parser;
+};
 
-var unit = v => mp(cs => [new Result(v, cs)]);
+export var item = mp(cs => cs.length ? [[cs[0], cs.substr(1)]] : []);
+export var unit = <A>(v:A): Parser<A> => mp(cs => [[v, cs]]);
+export var zero = mp(cs => []);
+export var plus = <A>(p:Parser<A>, q:Parser<A>):Parser<A> => mp(cs => p(cs).concat(q(cs)));
+export var pplus = <A>(p:Parser<A>, q:Parser<A>):Parser<A> => mp(cs => {
+  var res = plus<A>(p, q)(cs);
+  return res.length ? [res[0]] : [];
+});
+export var sat:<T>(pred:(v:T) => boolean) => Parser<T> = pred => item.bind(x => pred(x) ? unit(x) : zero);
+export var char = (x:string) => sat<string>(y => y === x);
+export var string = (x:string):Parser<string> =>
+  x.length ? char(x[0]).bind(c => string(x.substr(1)).bind(cs => unit(c + cs))) : unit('');
 
-var zero = mp(cs => []);
-var one = mp(cs => cs.length ? [] : [new Result(cs[0], cs.substr(1))]);
+export var seq = <A, B>(p:Parser<A>, q:Parser<B>):Parser<[A, B]> =>
+  p.bind(x => q.bind(y => unit<[A, B]>([x, y])));
 
-var seq = <a, b>(p:Parser<a>, q:Parser<b>) => p.bind(x => q.bind(y => unit([x, y])));
+export var seqPlain = <A, B>(p:Parser<A>, q:Parser<B>):Parser<[A, B]> => mp(cs => {
+  var pRes:[A, string][] = p(cs);
+  var qRes:[B, string][] = q(pRes[0][1]);
+  var res:[A,B] = [pRes[0][0], qRes[0][0]];
 
-var sat:<T>(predicate:(v:T) => boolean) => Parser<T> = predicate => one.bind(x => predicate(x) ? unit(x) : zero);
+  return [[res, qRes[0][1]]];
+});
 
-var char = (x:string) => sat<string>(y => y === x);
-var digit = sat<string>(x => x >= '0' && x <= '9');
-var lower = sat<string>(x => x >= 'a' && x <= 'z');
-var upper = sat<string>(x => x >= 'A' && x <= 'Z');
+export var digit = sat<string>(x => x >= '0' && x <= '9');
+export var lower = sat<string>(x => x >= 'a' && x <= 'z');
+export var upper = sat<string>(x => x >= 'A' && x <= 'Z');
 
-var plus = <A>(p:Parser<A>, q:Parser<A>):Parser<A> => mp(cs => p(cs).concat(q(cs)));
-var letter = plus(lower, upper);
-var alphanum = plus(letter, digit);
+export var letter = plus(lower, upper);
+export var alphanum = plus(letter, digit);
 
-var word:Parser<string> = plus(letter.bind(x => word.bind(xs => unit(x + xs))), unit(''));
-var many = <A>(p:Parser<A>):Parser<A[]> => plus(p.bind(x => many(p).bind(xs => unit([x].concat(xs)))), unit([]));
-var word2 = many(letter);
-var ident = lower.bind(x => many(alphanum).bind(xs => unit(x + xs)));
-var many1 = p => p.bind(x => many(p).bind(xs => unit([x].concat(xs))));
-var nat:Parser<number> = many1(digit).bind(xs => unit(parseFloat(xs)));
-var sepby1 = <a, b>(p:Parser<a>, sep:Parser<b>):Parser<a[]> =>
-    p.bind<a[]>(x => sep.bind(_ => many(p).bind(xs => unit([x].concat(xs)))));
-var int = plus(char('-').bind(_ => nat.bind(n => unit(-n))), nat);
-var ints = char('[').bind(_ => sepby1(int, char(',')).bind(ns => char(']').bind(_ => unit(ns))));
-var bracket = (open, p, close) => open.bind(_ => p.bind(x => close.bind(_ => unit(x))));
-var intsv2 = bracket(char('['), sepby1(int, char(',')), (char(']')));
+export var word:Parser<string> = plus(letter.bind(x => word.bind(xs => unit(x + xs))), unit(''));
+export var many1 = <A>(p:Parser<A>):Parser<A[]> => p.bind(x => many(p).bind(xs => unit([x].concat(xs))));
+export var many = <A>(p:Parser<A>):Parser<A[]> => pplus(many1(p), unit([]));
 
-var addop = plus(char('+').bind(_ => unit((a, b) => a + b)), char('-').bind(_ => unit((a, b) => a - b)));
-var factor = plus(nat, char('(').bind(_ => exprv2.bind(x => char(')').bind(_ => unit(x)))));
-var expr:Parser<number> =
-    factor.bind(x => many(addop.bind(f => factor.bind(y => unit([f, y])))).bind(fys =>
-        unit(fys.reduce((x, p) => p[0](x, p[1]), x))));
-var chainl1 = (p, op) =>
-    p.bind(x => many(op.bind(f => p.bind(y => unit([f, y]))))
-        .bind(fys => unit(fys.reduce((x, pair) => pair[0](x, pair[1]), x))));
+export var ident = lower.bind(x => many(alphanum).bind(xs => unit(x + xs)));
+export var nat:Parser<number> = many1(digit).bind(xs => unit(parseFloat(xs.join(''))));
 
-var exprv2 = chainl1(factor, addop);
+export var sepby1 = <A, B>(p:Parser<A>, sep:Parser<B>):Parser<A[]> =>
+  p.bind(x => many(sep.bind(_ => p)).bind(xs => unit([x].concat(xs))));
+
+export var sepby = (p, sep) => pplus(sepby1(p, sep), unit([]));
+/*
+
+export var chainl1 = <A>(p:Parser<A>, op:Parser<(a:A) => (b:A) => A>):Parser<A> =>
+  p.bind(x => many(op.bind(f => p.bind(y => unit([f, y]))))
+    .bind(fys => unit(fys.reduce((x, pair) => pair[0](x)(pair[1]), x))));
+*/
+
+export var chainl1 = <A>(p:Parser<A>, op:Parser<(a:A) => (b:A) => A>):Parser<A> => {
+  var rest = (x:A):Parser<A> => pplus(op.bind(f => p.bind(y => rest(f(x)(y)))), unit(x));
+  return p.bind(rest);
+};
+
+export var chainl = (p, op, a) => pplus(chainl1(p, op), unit(a));
+
+export var int = plus(char('-').bind(_ => nat.bind(n => unit(-n))), nat);
+export var ints = char('[').bind(_ => sepby1(int, char(',')).bind(ns => char(']').bind(_ => unit(ns))));
+export var bracket = (open, p, close) => open.bind(_ => p.bind(x => close.bind(_ => unit(x))));
+export var intsv2 = bracket(char('['), sepby1(int, char(',')), (char(']')));
+
+export var space:Parser<string[]> = many(sat<string>(x => x == ' '));
+export var token = <A>(p:Parser<A>):Parser<A> => p.bind(a => space.bind(_ => unit(a)));
+export var symb = (cs:string):Parser<string> => token(string(cs));
+export var apply = <A>(p:Parser<A>, cs:string):[A, string][] => space.bind(_ => p)(cs);
+
+export var expr:Parser<number>;
+export var addop:Parser<(a:number) => (b:number) => number>;
+export var mulop:Parser<(a:number) => (b:number) => number>;
+
+addop = pplus(symb('+').bind(_ => unit(a => b => a + b)), symb('-').bind(_ => unit(a => b => a - b)));
+mulop = pplus(symb('*').bind(_ => unit(a => b => a * b)), symb('/').bind(_ => unit(a => b => a / b)));
+
+export var numericDigit = token(digit).bind(x => unit(parseInt(x)));
+export var factor = pplus(numericDigit, symb('(').bind(_ => expr.bind(n => symb(')').bind(_ => unit(n)))));
+
+
+export var term = chainl1(factor, mulop);
+expr = chainl1(term, addop);
