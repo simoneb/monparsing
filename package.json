@@ -1,7 +1,7 @@
 {
   "name": "monparsing",
   "version": "1.0.0",
-  "description": "Source code for the talk 'Monadic Type Parser Combinators with TypeScript'",
+  "description": "Source code for the talk 'Monadic parser combinators with TypeScript'",
   "main": "parser.js",
   "scripts": {
     "postinstall": "tsc parser.ts spec/parser.spec.ts --module commonjs",
