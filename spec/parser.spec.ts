@@ -27,7 +27,7 @@ describe('parser', () => {
   describe('zero', () => {
 
     it('should always fail', () => {
-      expect(parse.zero('hello').length).toBe(0);
+      expect(parse.zero()('hello').length).toBe(0);
     });
 
   });
@@ -38,10 +38,8 @@ describe('parser', () => {
       var result = parse.plus(parse.item, parse.item)('hello');
 
       expect(result.length).toBe(2);
-      expect(result[0][0]).toBe('h');
-      expect(result[1][0]).toBe('h');
-      expect(result[0][1]).toBe('ello');
-      expect(result[1][1]).toBe('ello');
+      expect(result[0]).toEqual(['h', 'ello']);
+      expect(result[1]).toEqual(['h', 'ello']);
     });
 
   });
@@ -52,8 +50,7 @@ describe('parser', () => {
       var result = parse.pplus(parse.item, parse.item)('hello');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toBe('h');
-      expect(result[0][1]).toBe('ello');
+      expect(result[0]).toEqual(['h', 'ello']);
     });
 
   });
@@ -69,10 +66,10 @@ describe('parser', () => {
 
   });
 
-  describe('seqPlain', () => {
+  describe('naiveSeq', () => {
 
     it('should work', () => {
-      var result = parse.seqPlain(parse.item, parse.item)('hello');
+      var result = parse.naiveSeq(parse.item, parse.item)('hello');
 
       expect(result.length).toBe(1);
       expect(result[0]).toEqual([['h', 'e'], 'llo']);
@@ -82,11 +79,11 @@ describe('parser', () => {
 
   describe('sat', () => {
 
-    it('should match condition', () => {
-      var result = parse.sat(Number)('1');
+    it('should parse when condition matches', () => {
+      var result = parse.sat(Number)('1A');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toBe('1');
+      expect(result[0]).toEqual(['1', 'A']);
     });
 
     it('should fail when not matching', () => {
@@ -117,46 +114,43 @@ describe('parser', () => {
       expect(result[0][0]).toBe('');
     });
 
-    it('should return whole string for matching string', () => {
-      var result = parse.string('hello')('hello');
+    it('should parse matching string', () => {
+      var result = parse.string('hello')('helloWorld');
+
       expect(result.length).toBe(1);
-      expect(result[0][0]).toBe('hello');
-      expect(result[0][1]).toBe('');
+      expect(result[0]).toEqual(['hello', 'World']);
     });
 
   });
 
   describe('many', () => {
 
-    it('should return array of results', () => {
+    it('should concatenate the results', () => {
       var result = parse.many(parse.char('c'))('ccD');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toEqual(['c', 'c']);
-      expect(result[0][1]).toBe('D');
+      expect(result[0]).toEqual([['c', 'c'], 'D']);
     });
 
-    it('should return empty array when failing', () => {
+    it('should return empty array when it cannot parse', () => {
       var result = parse.many(parse.char('c'))('D');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toEqual([]);
-      expect(result[0][1]).toBe('D');
+      expect(result[0]).toEqual([[], 'D']);
     });
 
   });
 
   describe('many1', () => {
 
-    it('should return array of results', () => {
-      var result = parse.many1(parse.char('c'))('ccD');
+    it('should concatenate the results', () => {
+      var result = parse.many1(parse.char('c'))('ccCC');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toEqual(['c', 'c']);
-      expect(result[0][1]).toBe('D');
+      expect(result[0]).toEqual([['c', 'c'], 'CC']);
     });
 
-    it('should return fail when failing', () => {
+    it('should fail when it cannot parse', () => {
       var result = parse.many1(parse.char('c'))('D');
 
       expect(result.length).toBe(0);
@@ -166,12 +160,11 @@ describe('parser', () => {
 
   describe('sepby1', () => {
 
-    it('should succeed', () => {
-      var result = parse.sepby1(parse.letter, parse.digit)('a1b2c');
+    it('should parse letters separated by digits', () => {
+      var result = parse.sepby1(parse.letter, parse.digit)('a1b2c3');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toEqual(['a', 'b', 'c']);
-      expect(result[0][1]).toBe('');
+      expect(result[0]).toEqual([['a', 'b', 'c'], '3']);
     });
 
     it('should fail', () => {
@@ -186,7 +179,7 @@ describe('parser', () => {
 
   describe('sepby', () => {
 
-    it('should succeed', () => {
+    it('should parse letters separated by digits', () => {
       var result = parse.sepby(parse.letter, parse.digit)('a1b2c');
 
       expect(result.length).toBe(1);
@@ -206,9 +199,12 @@ describe('parser', () => {
 
   describe('chainl1', () => {
 
-    it('should work', () => {
-      var res = parse.chainl1(parse.digit.bind(x => parse.unit(parseInt(x))), parse.unit(a => b => a + b))('123');
-      expect(res[0][0]).toBe(6);
+    it('should parse digits and sum them up', () => {
+      var res = parse.chainl1(
+        parse.digit.bind(x => parse.unit(parseInt(x))),
+        parse.unit(a => b => a + b))('123a');
+
+      expect(res[0]).toEqual([6, 'a']);
     });
 
   });
@@ -247,11 +243,11 @@ describe('parser', () => {
 
   describe('expr', () => {
 
-    it('should work', () => {
-      var result = parse.apply(parse.expr, ' 1 - 2 * 3 + 4 ');
+    it('should parse and evaluate arithmetic expression', () => {
+      var result = parse.apply(parse.expr, ' 1 - 2 * (3 - 1) + 2 ');
 
       expect(result.length).toBe(1);
-      expect(result[0][0]).toBe(-1);
+      expect(result[0]).toEqual([-1, '']);
     });
 
   });

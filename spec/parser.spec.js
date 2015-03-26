@@ -13,25 +13,22 @@ describe('parser', function () {
     });
     describe('zero', function () {
         it('should always fail', function () {
-            expect(parse.zero('hello').length).toBe(0);
+            expect(parse.zero()('hello').length).toBe(0);
         });
     });
     describe('plus', function () {
         it('should concatenate the results of applying both parsers on the input', function () {
             var result = parse.plus(parse.item, parse.item)('hello');
             expect(result.length).toBe(2);
-            expect(result[0][0]).toBe('h');
-            expect(result[1][0]).toBe('h');
-            expect(result[0][1]).toBe('ello');
-            expect(result[1][1]).toBe('ello');
+            expect(result[0]).toEqual(['h', 'ello']);
+            expect(result[1]).toEqual(['h', 'ello']);
         });
     });
     describe('pplus', function () {
         it('should return the first result', function () {
             var result = parse.pplus(parse.item, parse.item)('hello');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toBe('h');
-            expect(result[0][1]).toBe('ello');
+            expect(result[0]).toEqual(['h', 'ello']);
         });
     });
     describe('seq', function () {
@@ -41,18 +38,18 @@ describe('parser', function () {
             expect(result[0]).toEqual([['h', 'e'], 'llo']);
         });
     });
-    describe('seqPlain', function () {
+    describe('naiveSeq', function () {
         it('should work', function () {
-            var result = parse.seqPlain(parse.item, parse.item)('hello');
+            var result = parse.naiveSeq(parse.item, parse.item)('hello');
             expect(result.length).toBe(1);
             expect(result[0]).toEqual([['h', 'e'], 'llo']);
         });
     });
     describe('sat', function () {
-        it('should match condition', function () {
-            var result = parse.sat(Number)('1');
+        it('should parse when condition matches', function () {
+            var result = parse.sat(Number)('1A');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toBe('1');
+            expect(result[0]).toEqual(['1', 'A']);
         });
         it('should fail when not matching', function () {
             var result = parse.sat(Number)('a');
@@ -73,45 +70,40 @@ describe('parser', function () {
             expect(result.length).toBe(1);
             expect(result[0][0]).toBe('');
         });
-        it('should return whole string for matching string', function () {
-            var result = parse.string('hello')('hello');
+        it('should parse matching string', function () {
+            var result = parse.string('hello')('helloWorld');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toBe('hello');
-            expect(result[0][1]).toBe('');
+            expect(result[0]).toEqual(['hello', 'World']);
         });
     });
     describe('many', function () {
-        it('should return array of results', function () {
+        it('should concatenate the results', function () {
             var result = parse.many(parse.char('c'))('ccD');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toEqual(['c', 'c']);
-            expect(result[0][1]).toBe('D');
+            expect(result[0]).toEqual([['c', 'c'], 'D']);
         });
-        it('should return empty array when failing', function () {
+        it('should return empty array when it cannot parse', function () {
             var result = parse.many(parse.char('c'))('D');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toEqual([]);
-            expect(result[0][1]).toBe('D');
+            expect(result[0]).toEqual([[], 'D']);
         });
     });
     describe('many1', function () {
-        it('should return array of results', function () {
-            var result = parse.many1(parse.char('c'))('ccD');
+        it('should concatenate the results', function () {
+            var result = parse.many1(parse.char('c'))('ccCC');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toEqual(['c', 'c']);
-            expect(result[0][1]).toBe('D');
+            expect(result[0]).toEqual([['c', 'c'], 'CC']);
         });
-        it('should return fail when failing', function () {
+        it('should fail when it cannot parse', function () {
             var result = parse.many1(parse.char('c'))('D');
             expect(result.length).toBe(0);
         });
     });
     describe('sepby1', function () {
-        it('should succeed', function () {
-            var result = parse.sepby1(parse.letter, parse.digit)('a1b2c');
+        it('should parse letters separated by digits', function () {
+            var result = parse.sepby1(parse.letter, parse.digit)('a1b2c3');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toEqual(['a', 'b', 'c']);
-            expect(result[0][1]).toBe('');
+            expect(result[0]).toEqual([['a', 'b', 'c'], '3']);
         });
         it('should fail', function () {
             var result = parse.sepby1(parse.letter, parse.digit)('ab2c');
@@ -121,7 +113,7 @@ describe('parser', function () {
         });
     });
     describe('sepby', function () {
-        it('should succeed', function () {
+        it('should parse letters separated by digits', function () {
             var result = parse.sepby(parse.letter, parse.digit)('a1b2c');
             expect(result.length).toBe(1);
             expect(result[0][0]).toEqual(['a', 'b', 'c']);
@@ -135,9 +127,9 @@ describe('parser', function () {
         });
     });
     describe('chainl1', function () {
-        it('should work', function () {
-            var res = parse.chainl1(parse.digit.bind(function (x) { return parse.unit(parseInt(x)); }), parse.unit(function (a) { return function (b) { return a + b; }; }))('123');
-            expect(res[0][0]).toBe(6);
+        it('should parse digits and sum them up', function () {
+            var res = parse.chainl1(parse.digit.bind(function (x) { return parse.unit(parseInt(x)); }), parse.unit(function (a) { return function (b) { return a + b; }; }))('123a');
+            expect(res[0]).toEqual([6, 'a']);
         });
     });
     describe('addop', function () {
@@ -161,10 +153,10 @@ describe('parser', function () {
         });
     });
     describe('expr', function () {
-        it('should work', function () {
-            var result = parse.apply(parse.expr, ' 1 - 2 * 3 + 4 ');
+        it('should parse and evaluate arithmetic expression', function () {
+            var result = parse.apply(parse.expr, ' 1 - 2 * (3 - 1) + 2 ');
             expect(result.length).toBe(1);
-            expect(result[0][0]).toBe(-1);
+            expect(result[0]).toEqual([-1, '']);
         });
     });
 });

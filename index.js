@@ -1,21 +1,22 @@
+var concat = [].concat.apply.bind([].concat, []);
 exports.mp = function (p) {
     var parser = p;
-    parser.bind = function (f) { return exports.mp(function (cs) { return [].concat.apply([], p(cs).map(function (res) { return f(res[0])(res[1]); })); }); };
+    parser.bind = function (f) { return exports.mp(function (cs) { return concat(p(cs).map(function (res) { return f(res[0])(res[1]); })); }); };
     return parser;
 };
 exports.item = exports.mp(function (cs) { return cs.length ? [[cs[0], cs.substr(1)]] : []; });
-exports.unit = function (v) { return exports.mp(function (cs) { return [[v, cs]]; }); };
-exports.zero = exports.mp(function (cs) { return []; });
+exports.unit = function (a) { return exports.mp(function (cs) { return [[a, cs]]; }); };
+exports.zero = function () { return exports.mp(function (cs) { return []; }); };
 exports.plus = function (p, q) { return exports.mp(function (cs) { return p(cs).concat(q(cs)); }); };
 exports.pplus = function (p, q) { return exports.mp(function (cs) {
     var res = exports.plus(p, q)(cs);
     return res.length ? [res[0]] : [];
 }); };
-exports.sat = function (pred) { return exports.item.bind(function (x) { return pred(x) ? exports.unit(x) : exports.zero; }); };
+exports.sat = function (pred) { return exports.item.bind(function (x) { return pred(x) ? exports.unit(x) : exports.zero(); }); };
 exports.char = function (x) { return exports.sat(function (y) { return y === x; }); };
 exports.string = function (x) { return x.length ? exports.char(x[0]).bind(function (c) { return exports.string(x.substr(1)).bind(function (cs) { return exports.unit(c + cs); }); }) : exports.unit(''); };
 exports.seq = function (p, q) { return p.bind(function (x) { return q.bind(function (y) { return exports.unit([x, y]); }); }); };
-exports.seqPlain = function (p, q) { return exports.mp(function (cs) {
+exports.naiveSeq = function (p, q) { return exports.mp(function (cs) {
     var pRes = p(cs);
     var qRes = q(pRes[0][1]);
     var res = [pRes[0][0], qRes[0][0]];
@@ -33,12 +34,6 @@ exports.ident = exports.lower.bind(function (x) { return exports.many(exports.al
 exports.nat = exports.many1(exports.digit).bind(function (xs) { return exports.unit(parseFloat(xs.join(''))); });
 exports.sepby1 = function (p, sep) { return p.bind(function (x) { return exports.many(sep.bind(function (_) { return p; })).bind(function (xs) { return exports.unit([x].concat(xs)); }); }); };
 exports.sepby = function (p, sep) { return exports.pplus(exports.sepby1(p, sep), exports.unit([])); };
-/*
-
-export var chainl1 = <A>(p:Parser<A>, op:Parser<(a:A) => (b:A) => A>):Parser<A> =>
-  p.bind(x => many(op.bind(f => p.bind(y => unit([f, y]))))
-    .bind(fys => unit(fys.reduce((x, pair) => pair[0](x)(pair[1]), x))));
-*/
 exports.chainl1 = function (p, op) {
     var rest = function (x) { return exports.pplus(op.bind(function (f) { return p.bind(function (y) { return rest(f(x)(y)); }); }), exports.unit(x)); };
     return p.bind(rest);
@@ -55,6 +50,9 @@ exports.apply = function (p, cs) { return exports.space.bind(function (_) { retu
 exports.expr;
 exports.addop;
 exports.mulop;
+exports.term;
+exports.factor;
+exports.numericDigit;
 exports.addop = exports.pplus(exports.symb('+').bind(function (_) { return exports.unit(function (a) { return function (b) { return a + b; }; }); }), exports.symb('-').bind(function (_) { return exports.unit(function (a) { return function (b) { return a - b; }; }); }));
 exports.mulop = exports.pplus(exports.symb('*').bind(function (_) { return exports.unit(function (a) { return function (b) { return a * b; }; }); }), exports.symb('/').bind(function (_) { return exports.unit(function (a) { return function (b) { return a / b; }; }); }));
 exports.numericDigit = exports.token(exports.digit).bind(function (x) { return exports.unit(parseInt(x)); });
