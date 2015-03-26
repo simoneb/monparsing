@@ -59,4 +59,3 @@ exports.numericDigit = exports.token(exports.digit).bind(function (x) { return e
 exports.factor = exports.pplus(exports.numericDigit, exports.symb('(').bind(function (_) { return exports.expr.bind(function (n) { return exports.symb(')').bind(function (_) { return exports.unit(n); }); }); }));
 exports.term = exports.chainl1(exports.factor, exports.mulop);
 exports.expr = exports.chainl1(exports.term, exports.addop);
-//# sourceMappingURL=index.js.map

@@ -1,4 +1,4 @@
-var parse = require('../index');
+var parse = require('../parser');
 describe('parser', function () {
     describe('item', function () {
         it('should parse the first character', function () {

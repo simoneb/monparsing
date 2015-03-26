@@ -3,7 +3,7 @@ declare var describe;
 declare var it;
 declare var expect;
 
-var parse = require('../index');
+var parse = require('../parser');
 
 describe('parser', () => {
 
